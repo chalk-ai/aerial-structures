@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Structures from Overhead Imagery</title>
+<style>
+  :root { --bg:#224A41; --panel:#1C3B34; --line:#32645B; --ink:#EFF5F3; --muted:#B9CFC7;
+          --accent:#BBD96D; --mint:#70CD96; --deep:#173029; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; padding:32px 16px; }
+  html.embed body { padding:20px; }
+  html.embed header { display:none; }
+  .wrap { max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:16px; }
+  .mono { font-family:ui-monospace,"SFMono-Regular",Menlo,monospace; text-transform:uppercase; letter-spacing:.06em; font-size:12px; }
+  h1 { font-size:22px; font-weight:500; margin:0 0 4px; }
+  header p, .muted { color:var(--muted); }
+  header p { margin:0; font-size:14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:14px; min-width:0; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .group { color:var(--muted); margin-right:4px; }
+  .preset { background:transparent; color:var(--ink); border:1px solid var(--line); border-radius:4px; padding:6px 10px;
+            cursor:pointer; font:inherit; font-size:14px; text-align:left; }
+  .preset small { display:block; color:var(--muted); font-size:11px; line-height:1.3; }
+  .preset.on { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+  .preset:hover { border-color:var(--muted); }
+  @media (max-width:640px) {
+    .prow { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }
+    .prow .group { flex:none; writing-mode:vertical-rl; transform:rotate(180deg); font-size:10px; }
+    .preset { flex:none; }
+  }
+  .custom { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .custom input { flex:1 1 220px; min-width:0; background:var(--deep); color:var(--ink); border:1px solid var(--line);
+                  border-radius:4px; padding:8px 10px; font:14px ui-monospace,Menlo,monospace; }
+  button.go { font:12px/14px ui-monospace,"SFMono-Regular",Menlo,monospace; text-transform:uppercase; letter-spacing:.06em;
+              border:1px solid var(--accent); border-radius:20px; padding:10px 18px; cursor:pointer; background:var(--accent); color:var(--bg); }
+  button.go:hover { background:transparent; color:var(--accent); }
+  button.go:disabled { opacity:.5; cursor:default; }
+  .ghost { background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:20px; padding:6px 12px;
+           font:11px ui-monospace,Menlo,monospace; text-transform:uppercase; cursor:pointer; }
+  .ghost:hover { color:var(--ink); border-color:var(--muted); }
+  .main { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:16px; align-items:start; }
+  @media (max-width:860px) { .main { grid-template-columns:1fr; } }
+  .stage { position:relative; background:var(--deep); border-radius:4px; overflow:hidden; aspect-ratio:1; }
+  .stage img, .stage svg { position:absolute; inset:0; width:100%; height:100%; }
+  .stage img { object-fit:fill; }
+  .stage .empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); padding:20px; text-align:center; }
+  .scan { position:absolute; left:0; right:0; height:2px; background:var(--mint); box-shadow:0 0 12px var(--mint); top:0; display:none;
+          animation:scan 1.6s linear infinite; }
+  @keyframes scan { from { top:0 } to { top:100% } }
+  svg polygon { stroke-width:1.6; vector-effect:non-scaling-stroke; cursor:pointer; transition:fill-opacity .2s, stroke-opacity .2s; }
+  svg polygon.pending { stroke:#EFF5F3; stroke-dasharray:3 3; fill:#EFF5F3; fill-opacity:.06; }
+  svg polygon.dim { stroke-opacity:.18; fill-opacity:.03 !important; }
+  svg polygon.sel { stroke-width:3.2; fill-opacity:.45 !important; }
+  svg polygon.label { fill:none; stroke:#F3F662; stroke-dasharray:4 3; pointer-events:none; }
+  .tip { position:absolute; pointer-events:none; background:rgba(23,48,41,.92); border:1px solid var(--line); border-radius:4px;
+         padding:4px 8px; font-size:12px; display:none; white-space:nowrap; z-index:2; }
+  .meta { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--muted); }
+  .layers { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; font-size:13px; color:var(--muted); }
+  .layers label { display:flex; gap:5px; align-items:center; cursor:pointer; }
+  .layers input:disabled + span { opacity:.4; }
+  .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .step { border:1px solid var(--line); border-radius:4px; padding:8px 10px; }
+  .step div:last-child { font-size:17px; margin-top:2px; }
+  .step.live { border-color:var(--mint); }
+  .step.ok div:first-child { color:var(--mint); }
+  .legend { margin-top:14px; display:flex; flex-direction:column; gap:2px; }
+  .lg { display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:4px; cursor:pointer; font-size:14px; border:1px solid transparent; }
+  .lg:hover { border-color:var(--line); }
+  .lg.on { border-color:var(--accent); }
+  .lg i { width:12px; height:12px; border-radius:2px; flex:none; }
+  .lg span:nth-child(2) { flex:1; }
+  .lg b { font-weight:500; font-variant-numeric:tabular-nums; }
+  .kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:14px; }
+  .kpi { border:1px solid var(--line); border-radius:4px; padding:8px 10px; }
+  .kpi div:last-child { font-size:17px; }
+  .scene { margin-top:14px; border-left:2px solid var(--mint); padding-left:10px; }
+  .scene p { margin:2px 0 0; font-size:13px; color:var(--ink); }
+  .detail { margin-top:14px; }
+  .detail table { width:100%; border-collapse:collapse; font-size:13px; }
+  .detail td { padding:5px 4px; border-top:1px solid var(--line); vertical-align:top; }
+  .detail td:first-child { color:var(--muted); width:42%; }
+  .err { color:#F8947F; font-size:13px; min-height:18px; }
+  .note { color:var(--muted); font-size:12px; }
+  .note a { color:var(--muted); }
+</style>
+<script>
+  if (new URLSearchParams(location.search).has("embed")) document.documentElement.classList.add("embed");
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Structures from overhead imagery</h1>
+    <p>Pick a place. The server pulls the newest imagery, outlines every building and pool, measures each outline, and classifies every building with a vision-language model.</p>
+  </header>
+  <div class="card">
+    <div id="presets"></div>
+    <form class="custom" id="customForm">
+      <input id="coords" placeholder="Any US location: lat, lon (or a Google Maps link)" autocomplete="off" spellcheck="false">
+      <button class="go" id="go" type="submit" data-demo-action="run_custom">Extract structures</button>
+    </form>
+    <div class="err" id="err"></div>
+  </div>
+  <div class="main">
+    <div class="card">
+      <div class="stage" id="stage">
+        <img id="img" alt="">
+        <svg id="svg" preserveAspectRatio="none"></svg>
+        <div class="scan" id="scan"></div>
+        <div class="empty" id="empty">Choose a place above.</div>
+        <div class="tip" id="tip"></div>
+      </div>
+      <div class="layers">
+        <label><input type="checkbox" id="lyB" checked><span>Buildings</span></label>
+        <label><input type="checkbox" id="lyP" checked><span>Pools</span></label>
+        <label><input type="checkbox" id="lyL" disabled><span>Hand-drawn labels</span></label>
+      </div>
+      <div class="meta"><span id="src"></span><span id="where"></span></div>
+    </div>
+    <div class="card">
+      <div class="steps">
+        <div class="step" id="s1"><div class="mono">Imagery</div><div id="t1">–</div></div>
+        <div class="step" id="s2"><div class="mono">Outlines</div><div id="t2">–</div></div>
+        <div class="step" id="s3"><div class="mono">Classified</div><div id="t3">–</div></div>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="mono muted">Buildings</div><div id="kB">–</div></div>
+        <div class="kpi"><div class="mono muted">Roof area</div><div id="kA">–</div></div>
+        <div class="kpi"><div class="mono muted">Pools</div><div id="kP">–</div></div>
+      </div>
+      <div class="scene" id="sceneBox" style="display:none"><div class="mono muted">What the model sees</div><p id="scene"></p></div>
+      <div class="legend" id="legend"></div>
+      <div class="detail" id="detail"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="ghost" id="dl" disabled data-demo-action="download_geojson">Download GeoJSON</button>
+      </div>
+      <p class="note" id="credit"></p>
+    </div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const TYPES = {
+  single_family_house: ["House", "#70CD96"], multi_family: ["Townhomes / apartments", "#F3F662"],
+  manufactured_home: ["Manufactured home", "#BBD96D"], commercial: ["Commercial", "#F8947F"],
+  industrial: ["Industrial", "#7FC8F8"], institutional: ["Institutional", "#C9A7F5"],
+  agricultural: ["Agricultural", "#E8B86B"], accessory: ["Garage / shed", "#9FB8AF"],
+  pool: ["Swimming pool", "#34E1F0"],
+};
+const nice = (s) => s.replaceAll("_", " ").replace(" or ", " / ");
+const fmtMs = (ms) => ms >= 1000 ? (ms / 1000).toFixed(1) + " s" : ms + " ms";
+const track = (action, label) => { if (window.parent !== window) window.parent.postMessage({ type: "chalk-demo-interaction", action, label }, "*"); };
+let es = null, items = new Map(), labels = [], focus = null, selected = null, image = null, t0 = 0, active = null;
+
+async function loadPresets() {
+  const ps = await (await fetch("api/presets")).json();
+  const box = $("presets");
+  for (const kind of ["aerial", "satellite"]) {
+    const row = document.createElement("div");
+    row.className = "row prow";
+    row.style.marginTop = kind === "satellite" ? "10px" : "0";
+    row.innerHTML = `<span class="mono group">${kind === "aerial" ? "Aerial · NAIP" : "Satellite · WorldView-3"}</span>`;
+    for (const p of ps.filter((x) => x.kind === kind)) {
+      const b = document.createElement("button");
+      b.className = "preset"; b.dataset.id = p.id;
+      b.dataset.demoAction = "select_preset"; b.dataset.demoLabel = p.name;
+      b.innerHTML = `${p.name}<small>${p.blurb}</small>`;
+      b.onclick = () => { track("select_preset", p.name); start(`preset=${p.id}`, p.id); };
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  }
+  start(`preset=${ps[0].id}`, ps[0].id);
+}
+
+function parseCoords(s) {
+  const m = s.match(/@?(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const lat = +m[1], lon = +m[2];
+  if (lat < 24.4 || lat > 49.5 || lon < -125 || lon > -66.9) return "range";
+  return { lat, lon };
+}
+
+$("customForm").onsubmit = (e) => {
+  e.preventDefault();
+  const c = parseCoords($("coords").value);
+  if (!c) { $("err").textContent = "Enter a latitude and longitude, like 33.615, -111.889."; return; }
+  if (c === "range") { $("err").textContent = "Custom locations use NAIP aerial imagery, which covers the contiguous US."; return; }
+  track("run_custom");
+  start(`lat=${c.lat}&lon=${c.lon}`, null);
+};
+
+function reset() {
+  items = new Map(); labels = []; focus = null; selected = null; image = null;
+  $("svg").innerHTML = ""; $("legend").innerHTML = ""; $("detail").innerHTML = ""; $("err").textContent = "";
+  for (const k of ["t1", "t2", "t3", "kB", "kA", "kP"]) $(k).textContent = "–";
+  for (const k of ["s1", "s2", "s3"]) $(k).className = "step";
+  $("dl").disabled = true; $("lyL").disabled = true; $("lyL").checked = false;
+  $("sceneBox").style.display = "none";
+}
+
+function start(query, presetId) {
+  if (es) es.close();
+  reset();
+  active = presetId;
+  document.querySelectorAll(".preset").forEach((b) => b.classList.toggle("on", b.dataset.id === presetId));
+  $("go").disabled = true; $("s1").classList.add("live"); $("scan").style.display = "block";
+  $("empty").textContent = "Fetching imagery…"; $("empty").style.display = "flex"; $("img").style.opacity = .35;
+  t0 = performance.now();
+  let finished = false;
+  es = new EventSource(`api/analyze?${query}`);
+  es.addEventListener("image", (e) => onImage(JSON.parse(e.data)));
+  es.addEventListener("structures", (e) => onStructures(JSON.parse(e.data)));
+  es.addEventListener("scene", (e) => { $("scene").textContent = JSON.parse(e.data).description; $("sceneBox").style.display = ""; });
+  es.addEventListener("class", (e) => onClass(JSON.parse(e.data)));
+  es.addEventListener("done", (e) => { finished = true; onDone(JSON.parse(e.data)); es.close(); });
+  es.addEventListener("failed", (e) => { finished = true; fail(JSON.parse(e.data).message); es.close(); });
+  es.onerror = () => { if (!finished) fail("The demo is busy or unreachable. Try a preset, or try again in a minute."); es.close(); };
+}
+
+function fail(msg) {
+  $("err").textContent = msg; $("go").disabled = false; $("scan").style.display = "none";
+  $("empty").textContent = image ? "" : "No imagery."; $("empty").style.display = image ? "none" : "flex"; $("img").style.opacity = 1;
+}
+
+function onImage(d) {
+  image = d;
+  $("img").src = d.url; $("img").style.opacity = 1; $("empty").style.display = "none";
+  $("svg").setAttribute("viewBox", `0 0 ${d.width} ${d.height}`);
+  $("stage").style.aspectRatio = `${d.width} / ${d.height}`;
+  // Preset imagery is fetched when the server starts; a custom location is fetched live.
+  $("t1").textContent = d.fetch_ms < 20 ? "cached" : fmtMs(d.fetch_ms); $("s1").className = "step ok"; $("s2").classList.add("live");
+  const c = d.corners, lat = (c[0][1] + c[2][1]) / 2, lon = (c[0][0] + c[2][0]) / 2;
+  $("src").textContent = `${d.source} · ${d.captured} · ${d.native_gsd} m native`;
+  $("where").textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  $("credit").innerHTML = d.kind === "satellite"
+    ? 'Imagery and labels: <a href="https://spacenet.ai/" target="_blank" rel="noopener">SpaceNet</a> / Maxar, CC BY-SA 4.0.'
+    : 'Imagery: USDA NAIP via Microsoft Planetary Computer, public domain.';
+}
+
+function poly(points, cls) {
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+  p.setAttribute("points", points.map((q) => q.join(",")).join(" "));
+  p.setAttribute("class", cls);
+  return p;
+}
+
+function onStructures(d) {
+  $("scan").style.display = "none";
+  $("t2").textContent = fmtMs(d.detect_ms); $("s2").className = "step ok"; $("s3").classList.add("live");
+  labels = d.labels || [];
+  if (labels.length && image) {
+    $("lyL").disabled = false;
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.id = "labels"; g.style.display = "none";
+    for (const ring of labels) g.appendChild(poly(ring, "label"));
+    $("svg").appendChild(g);
+  }
+  for (const it of d.items) {
+    const el = poly(it.px, it.kind === "pool" ? "pool" : "pending");
+    if (it.kind === "pool") paint(el, "pool");
+    el.onmouseenter = (e) => tip(e, it.id); el.onmousemove = (e) => tip(e, it.id); el.onmouseleave = () => ($("tip").style.display = "none");
+    el.onclick = () => { select(it.id); track("select_structure", it.kind); };
+    it.el = el; items.set(it.id, it);
+    $("svg").appendChild(el);
+  }
+  layers(); summary();
+  $("dl").disabled = false;
+}
+
+function paint(el, type) {
+  const c = TYPES[type][1];
+  el.setAttribute("class", type === "pool" ? "pool" : "done");
+  el.style.stroke = c; el.style.fill = c; el.style.fillOpacity = .22;
+}
+
+function onClass(d) {
+  const it = items.get(d.id);
+  if (!it) return;
+  Object.assign(it, { type: d.structure_type, roof_shape: d.roof_shape, roof_color: d.roof_color });
+  paint(it.el, d.structure_type);
+  if (focus) it.el.classList.toggle("dim", focus !== d.structure_type);
+  if (selected === d.id) { it.el.classList.add("sel"); detail(it); }
+  summary();
+}
+
+function onDone(d) {
+  $("t3").textContent = `${d.classified} · ${fmtMs(d.classify_ms)}`; $("s3").className = "step ok";
+  $("go").disabled = false;
+  if (selected == null) {
+    const big = [...items.values()].filter((x) => x.kind === "building").sort((a, b) => b.area_m2 - a.area_m2)[0];
+    if (big) select(big.id);
+  }
+}
+
+function summary() {
+  const bs = [...items.values()].filter((x) => x.kind === "building"), pools = items.size - bs.length;
+  const done = bs.filter((x) => x.type).length;
+  $("kB").textContent = bs.length;
+  $("kA").textContent = Math.round(bs.reduce((s, x) => s + x.area_m2, 0)).toLocaleString() + " m²";
+  $("kP").textContent = pools;
+  if ($("s3").className.includes("live")) $("t3").textContent = `${done} / ${Math.min(bs.length, 160)}`;
+  const counts = {};
+  for (const x of bs) if (x.type) counts[x.type] = (counts[x.type] || 0) + 1;
+  if (pools) counts.pool = pools;
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  $("legend").innerHTML = "";
+  for (const [k, n] of rows) {
+    const r = document.createElement("div");
+    r.className = "lg" + (focus === k ? " on" : "");
+    r.dataset.demoAction = "filter_type"; r.dataset.demoLabel = k;
+    r.innerHTML = `<i style="background:${TYPES[k][1]}"></i><span>${TYPES[k][0]}</span><b>${n}</b>`;
+    r.onclick = () => { focus = focus === k ? null : k; applyFocus(); summary(); };
+    $("legend").appendChild(r);
+  }
+}
+
+function applyFocus() {
+  for (const it of items.values()) {
+    const t = it.kind === "pool" ? "pool" : it.type;
+    it.el.classList.toggle("dim", !!focus && focus !== t);
+  }
+}
+
+function select(id) {
+  if (selected != null && items.has(selected)) items.get(selected).el.classList.remove("sel");
+  selected = id;
+  const it = items.get(id);
+  it.el.classList.add("sel");
+  it.el.parentNode.appendChild(it.el);
+  detail(it);
+}
+
+function detail(it) {
+  const rows = [];
+  if (it.kind === "pool") rows.push(["Structure", "Swimming pool"]);
+  else {
+    rows.push(["Structure", it.type ? TYPES[it.type][0] : "classifying…"]);
+    if (it.type) rows.push(["Roof", `${nice(it.roof_shape)}, ${nice(it.roof_color)}`]);
+  }
+  rows.push(
+    ["Footprint area", `${it.area_m2.toLocaleString()} m² (${Math.round(it.area_m2 * 10.7639).toLocaleString()} ft²)`],
+    ["Perimeter", `${it.perimeter_m} m`],
+    ["Length × width", `${it.length_m} × ${it.width_m} m`],
+    ["Long axis bearing", `${it.orientation_deg}°`],
+    ["Rectangularity", it.rectangularity],
+    ["Vertices", it.vertices],
+    ["Centroid", `${it.centroid[1].toFixed(6)}, ${it.centroid[0].toFixed(6)}`],
+  );
+  $("detail").innerHTML = `<div class="mono muted" style="margin-bottom:4px">Selected · #${it.id}</div><table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>`;
+}
+
+function tip(e, id) {
+  const it = items.get(id), r = $("stage").getBoundingClientRect(), t = $("tip");
+  const name = it.kind === "pool" ? "Swimming pool" : it.type ? TYPES[it.type][0] : "Building";
+  t.textContent = `${name} · ${Math.round(it.area_m2).toLocaleString()} m²`;
+  t.style.display = "block";
+  t.style.left = Math.min(e.clientX - r.left + 12, r.width - t.offsetWidth - 4) + "px";
+  t.style.top = Math.max(e.clientY - r.top - 30, 4) + "px";
+}
+
+function layers() {
+  for (const it of items.values()) it.el.style.display = (it.kind === "pool" ? $("lyP") : $("lyB")).checked ? "" : "none";
+  const g = $("labels");
+  if (g) g.style.display = $("lyL").checked ? "" : "none";
+}
+for (const id of ["lyB", "lyP", "lyL"]) $(id).onchange = () => { layers(); track("toggle_layer", id); };
+
+$("dl").onclick = () => {
+  track("download_geojson");
+  const features = [...items.values()].map((it) => ({
+    type: "Feature",
+    geometry: { type: "Polygon", coordinates: [it.ring] },
+    properties: {
+      id: it.id, kind: it.kind, structure_type: it.kind === "pool" ? "swimming_pool" : it.type ?? null,
+      roof_shape: it.roof_shape ?? null, roof_color: it.roof_color ?? null,
+      area_m2: it.area_m2, perimeter_m: it.perimeter_m, length_m: it.length_m, width_m: it.width_m,
+      orientation_deg: it.orientation_deg, rectangularity: it.rectangularity, detector_score: it.score,
+    },
+  }));
+  const blob = new Blob([JSON.stringify({ type: "FeatureCollection", features }, null, 1)], { type: "application/geo+json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `structures-${active || "custom"}.geojson`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+loadPresets().catch(() => fail("Could not load the presets."));
+
+// Embedded in another page: report our height so the parent can size the iframe to fit.
+if (document.documentElement.classList.contains("embed") && window.parent !== window) {
+  const report = () => window.parent.postMessage(
+    { type: "chalk-demo-height", height: Math.ceil(document.body.getBoundingClientRect().height) }, "*");
+  new ResizeObserver(report).observe(document.body);
+  report();
+}
+</script>
+</body>
+</html>
