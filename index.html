@@ -27,7 +27,6 @@
   .preset:hover { border-color:var(--muted); }
   @media (max-width:640px) {
     .prow { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }
-    .prow .group { flex:none; writing-mode:vertical-rl; transform:rotate(180deg); font-size:10px; }
     .preset { flex:none; }
   }
   .custom { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
@@ -158,10 +157,13 @@ async function loadPresets() {
   const ps = await (await fetch("api/presets")).json();
   const box = $("presets");
   for (const kind of ["aerial", "satellite"]) {
+    const head = document.createElement("div");
+    head.className = "mono group";
+    head.style.margin = kind === "satellite" ? "12px 0 6px" : "0 0 6px";
+    head.textContent = kind === "aerial" ? "Aerial · USDA NAIP" : "Satellite · Maxar WorldView-3";
+    box.appendChild(head);
     const row = document.createElement("div");
     row.className = "row prow";
-    row.style.marginTop = kind === "satellite" ? "10px" : "0";
-    row.innerHTML = `<span class="mono group">${kind === "aerial" ? "Aerial · NAIP" : "Satellite · WorldView-3"}</span>`;
     for (const p of ps.filter((x) => x.kind === kind)) {
       const b = document.createElement("button");
       b.className = "preset"; b.dataset.id = p.id;
